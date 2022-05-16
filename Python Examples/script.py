@@ -210,17 +210,16 @@ print(conf_mat1)
 ########################################################################
 
 # The ROC curve is made from training set, because we need the true y values, which are not available for the test set.
-# Here we will show that using the output from decision_function() and predict_proba() lead to equivalent ROC values
 
-y_score1a = model1.decision_function(X_train)
-fpr1a, tpr1a, thresholds1a = metrics.roc_curve(y_train, y_score1a)
+y_score1 = model1.decision_function(X_train)
+fpr1, tpr1, thresholds1 = metrics.roc_curve(y_train, y_score1)
 
-roc_auc = metrics.auc(fpr1a, tpr1a)
+roc_auc = metrics.auc(fpr1, tpr1)
 
 fig1 = plt.figure()
 fignum = fig1.number
 lw = 2
-plt.plot(fpr1a, tpr1a, color='darkorange',
+plt.plot(fpr1, tpr1, color='darkorange',
          lw=lw, label=f'ROC curve (area = {roc_auc:0.2f})')
 plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
 plt.xlim([0.0, 1.0])
@@ -230,66 +229,41 @@ plt.ylabel('True Positive Rate')
 plt.title('Receiver operating characteristic on training data')
 plt.legend(loc="lower right")
 plt.show()
-
-y_score1b = model1.predict_proba(X_train)[:,1]
-fpr1b, tpr1b, thresholds1b = metrics.roc_curve(y_train, y_score1b)
-
-roc_auc = metrics.auc(fpr1b, tpr1b)
-
-fig1 = plt.figure()
-fignum = fig1.number
-lw = 2
-plt.plot(fpr1b, tpr1b, color='darkorange',
-         lw=lw, label=f'ROC curve (area = {roc_auc:0.2f})')
-plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('Receiver operating characteristic on training data')
-plt.legend(loc="lower right")
-plt.show()
-
-print((fpr1b == fpr1a).sum() == len(fpr1b))
-# True
-
-# Therefore decision_function() and predict_proba() can both be used to generate false positive and true positive rates
 
 ########################################################################
 ### Random forest classification #######################################
 ########################################################################
 
-# model2 = RandomForestClassifier()
-# model2.fit(X_train, y_train)
-# y_hat_train2 = model2.predict(X_train)
-# y_hat_test2 = model2.predict(X_test)
+model2 = RandomForestClassifier()
+model2.fit(X_train, y_train)
+y_hat_train2 = model2.predict(X_train)
+y_hat_test2 = model2.predict(X_test)
 
-# train_acc = np.sum(y_train == y_hat_train2)
+train_acc = np.sum(y_train == y_hat_train2)
 
-# ## Confusion Matrix
-# conf_mat2 = pd.DataFrame(metrics.confusion_matrix(y_train, y_hat_train2), columns=["Pred. Positive", "Pred. Negative"], index=["True Positive", "True Negative"])
-# print(conf_mat2)
+## Confusion Matrix
+conf_mat2 = pd.DataFrame(metrics.confusion_matrix(y_train, y_hat_train2), columns=["Pred. Positive", "Pred. Negative"], index=["True Positive", "True Negative"])
+print(conf_mat2)
 
-# ## ROC Curve
-# y_score2 = model2.predict_proba(X_train)[:,1]  # h/t https://stackoverflow.com/questions/55605681/how-to-get-decision-function-in-randomforest-in-sklearn
-# fpr2, tpr2, thresholds2 = metrics.roc_curve(y_train, y_score2)
+## ROC Curve
+y_score2 = model2.predict_proba(X_train)[:,1]
+fpr2, tpr2, thresholds2 = metrics.roc_curve(y_train, y_score2)
 
-# roc_auc2 = metrics.auc(fpr2, tpr2)
+roc_auc2 = metrics.auc(fpr2, tpr2)
 
-# fig2 = plt.figure()
-# fignum2 = fig2.number
-# lw = 2
-# plt.plot(fpr2, tpr2, color='darkorange',
-#          lw=lw, label=f'ROC curve (area = {roc_auc:0.2f})')
-# plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
-# plt.xlim([0.0, 1.0])
-# plt.ylim([0.0, 1.05])
-# plt.xlabel('False Positive Rate')
-# plt.ylabel('True Positive Rate')
-# plt.title('Receiver operating characteristic on training data (Random Forest)')
-# plt.legend(loc="lower right")
-# plt.show()
+fig2 = plt.figure()
+fignum2 = fig2.number
+lw = 2
+plt.plot(fpr2, tpr2, color='darkorange',
+         lw=lw, label=f'ROC curve (area = {roc_auc2:0.2f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic on training data (Random Forest)')
+plt.legend(loc="lower right")
+plt.show()
 
-########################################################################
-### EOF ################################################################
-########################################################################
+# Model1 has a AUC of 0.8599
+# Model2 has a AUC of 0.9976
