@@ -1,5 +1,5 @@
 # portfolio
-My Job Application Portfolio!
+A portfolio of some significant work I have accomplished.
 
 ## Interactive notebooks
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/ChemGuy88/portfolio/HEAD)
