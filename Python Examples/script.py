@@ -7,11 +7,6 @@ Kaggle's Titanic Competition
 https://www.kaggle.com/competitions/titanic
 
 I actually did most of this as homework for the Machine Learning class from FSU's Engineering in 2021
-
-pprint(sorted(levels_test.unique().tolist()))
-pprint(sorted(levels_train.unique().tolist()))
-
-Convert to ordinal. This way we can use `T` in the test set, and `F, G` becomes an intermediate value between `F` and `G`.
 """
 
 import os
@@ -20,6 +15,7 @@ import string
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from IPython import get_ipython
 from pathlib import Path
 from pprint import pprint
 from sklearn import metrics
@@ -27,11 +23,13 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-# pprint(sorted(levels_test.unique().tolist()))
-# pprint(sorted(levels_train.unique().tolist()))
+# Script settings
+get_ipython().magic('matplotlib')
 
-
+# Script-wide variables
 datasetsPath = "data"
+
+# Load training Data
 trainfname = "train.csv"
 trainpath = os.path.join(datasetsPath, trainfname)
 traindata0 = pd.read_csv(trainpath, index_col=0)
@@ -135,12 +133,12 @@ scaler = StandardScaler().fit(X_train0)
 X_train = pd.DataFrame(scaler.transform(X_train0), index=X_train0.index, columns=X_train0.columns)
 
 # Train
-model = LogisticRegression().fit(X_train, y_train)
+model1 = LogisticRegression().fit(X_train, y_train)
 
 # Predict
-accuracy1 = model.score(X_train, y_train)
+accuracy1 = model1.score(X_train, y_train)
 
-y_hat_train1 = model.predict(X_train)
+y_hat_train1 = model1.predict(X_train)
 accuracy2 = np.mean(y_hat_train1 == y_train)
 
 # print(accuracy1 == accuracy2)  # True
@@ -161,6 +159,10 @@ testdata0 = pd.read_csv(testpath, index_col=0)
 testdata1 = testdata0.copy()
 levels_test = extractCabinLevels(testdata1)
 levels_quant_test = levels_test.apply(convertCabinLevels)
+
+# Compare unique Cabin level values from train and test sets
+pprint(sorted(pd.Series([",".join(s) for s in levels_test]).unique()))
+pprint(sorted(pd.Series([",".join(s) for s in levels_train]).unique()))
 
 # We replace the values thus:
 testdata1.loc[levels_quant_test.index, "Cabin"] = levels_quant_test.values
@@ -188,7 +190,7 @@ X_test0 = testdata[xcolumns]
 X_test = pd.DataFrame(scaler.transform(X_test0), index=X_test0.index, columns=X_test0.columns)
 
 # Predict response
-yhat_test = model.predict(X_test)
+yhat_test = model1.predict(X_test)
 
 print(yhat_test)
 
@@ -208,16 +210,17 @@ print(conf_mat1)
 ########################################################################
 
 # The ROC curve is made from training set, because we need the true y values, which are not available for the test set.
+# Here we will show that using the output from decision_function() and predict_proba() lead to equivalent ROC values
 
-y_score = model.decision_function(X_train)
-fpr, tpr, thresholds = metrics.roc_curve(y_train, y_score)
+y_score1a = model1.decision_function(X_train)
+fpr1a, tpr1a, thresholds1a = metrics.roc_curve(y_train, y_score1a)
 
-roc_auc = metrics.auc(fpr, tpr)
+roc_auc = metrics.auc(fpr1a, tpr1a)
 
-fig = plt.figure()
-fignum = fig.number
+fig1 = plt.figure()
+fignum = fig1.number
 lw = 2
-plt.plot(fpr, tpr, color='darkorange',
+plt.plot(fpr1a, tpr1a, color='darkorange',
          lw=lw, label=f'ROC curve (area = {roc_auc:0.2f})')
 plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
 plt.xlim([0.0, 1.0])
@@ -228,40 +231,64 @@ plt.title('Receiver operating characteristic on training data')
 plt.legend(loc="lower right")
 plt.show()
 
-########################################################################
-### Random forest classification #######################################
-########################################################################
+y_score1b = model1.predict_proba(X_train)[:,1]
+fpr1b, tpr1b, thresholds1b = metrics.roc_curve(y_train, y_score1b)
 
-model2 = RandomForestClassifier()
-model2.fit(X_train, y_train)
-y_hat_train2 = model2.predict(X_train)
-y_hat_test2 = model2.predict(X_test)
+roc_auc = metrics.auc(fpr1b, tpr1b)
 
-train_acc = np.sum(y_train == y_hat_train2)
-
-## Confusion Matrix
-conf_mat2 = pd.DataFrame(metrics.confusion_matrix(y_train, y_hat_train2), columns=["Pred. Positive", "Pred. Negative"], index=["True Positive", "True Negative"])
-print(conf_mat2)
-
-## ROC Curve
-y_score2 = model2.decision_function(X_train)
-fpr2, tpr2, thresholds2 = metrics.roc_curve(y_train, y_score2)
-
-roc_auc2 = metrics.auc(fpr2, tpr2)
-
-fig2 = plt.figure()
-fignum2 = fig2.number
+fig1 = plt.figure()
+fignum = fig1.number
 lw = 2
-plt.plot(fpr2, tpr2, color='darkorange',
+plt.plot(fpr1b, tpr1b, color='darkorange',
          lw=lw, label=f'ROC curve (area = {roc_auc:0.2f})')
 plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
 plt.xlim([0.0, 1.0])
 plt.ylim([0.0, 1.05])
 plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
-plt.title('Receiver operating characteristic on training data (Random Forest)')
+plt.title('Receiver operating characteristic on training data')
 plt.legend(loc="lower right")
 plt.show()
+
+print((fpr1b == fpr1a).sum() == len(fpr1b))
+# True
+
+# Therefore decision_function() and predict_proba() can both be used to generate false positive and true positive rates
+
+########################################################################
+### Random forest classification #######################################
+########################################################################
+
+# model2 = RandomForestClassifier()
+# model2.fit(X_train, y_train)
+# y_hat_train2 = model2.predict(X_train)
+# y_hat_test2 = model2.predict(X_test)
+
+# train_acc = np.sum(y_train == y_hat_train2)
+
+# ## Confusion Matrix
+# conf_mat2 = pd.DataFrame(metrics.confusion_matrix(y_train, y_hat_train2), columns=["Pred. Positive", "Pred. Negative"], index=["True Positive", "True Negative"])
+# print(conf_mat2)
+
+# ## ROC Curve
+# y_score2 = model2.predict_proba(X_train)[:,1]  # h/t https://stackoverflow.com/questions/55605681/how-to-get-decision-function-in-randomforest-in-sklearn
+# fpr2, tpr2, thresholds2 = metrics.roc_curve(y_train, y_score2)
+
+# roc_auc2 = metrics.auc(fpr2, tpr2)
+
+# fig2 = plt.figure()
+# fignum2 = fig2.number
+# lw = 2
+# plt.plot(fpr2, tpr2, color='darkorange',
+#          lw=lw, label=f'ROC curve (area = {roc_auc:0.2f})')
+# plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+# plt.xlim([0.0, 1.0])
+# plt.ylim([0.0, 1.05])
+# plt.xlabel('False Positive Rate')
+# plt.ylabel('True Positive Rate')
+# plt.title('Receiver operating characteristic on training data (Random Forest)')
+# plt.legend(loc="lower right")
+# plt.show()
 
 ########################################################################
 ### EOF ################################################################
