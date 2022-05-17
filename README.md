@@ -6,7 +6,7 @@ A portfolio of some significant work I have accomplished.
 
 - Python Examples
   - Diabetes [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org)
-  - 
+  - Kaggle-Titanic
 
 ## References:
 - Run Jupyter Notebooks from GitHub: https://soshnikov.com/education/how-to-execute-notebooks-from-github/
