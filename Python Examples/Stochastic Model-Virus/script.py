@@ -1,4 +1,3 @@
-# copied from `ps3b.py` in 6002x from edx.org
 # Problem Set 3: Simulating the Spread of Disease and Virus Population Dynamics
 
 import numpy
