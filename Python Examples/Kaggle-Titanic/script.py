@@ -16,20 +16,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from IPython import get_ipython
-from pathlib import Path
 from pprint import pprint
 from sklearn import metrics
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from datetime import datetime as dt
 
 # Script settings
-get_ipython().magic('matplotlib')
+get_ipython().run_line_magic('matplotlib', "")  # Not necessary in Jupyter Notebooks
 
 # Script-wide variables
 datasetsPath = "data"
 
 # Load training Data
+# SibSp = Siblings and spouse. It gives the number of people accompanying a passenger.
 trainfname = "train.csv"
 trainpath = os.path.join(datasetsPath, trainfname)
 traindata0 = pd.read_csv(trainpath, index_col=0)
@@ -136,16 +137,16 @@ X_train = pd.DataFrame(scaler.transform(X_train0), index=X_train0.index, columns
 model1 = LogisticRegression().fit(X_train, y_train)
 
 # Predict
-accuracy1 = model1.score(X_train, y_train)
+accuracy1a = model1.score(X_train, y_train)
 
 y_hat_train1 = model1.predict(X_train)
-accuracy2 = np.mean(y_hat_train1 == y_train)
+accuracy1b = np.mean(y_hat_train1 == y_train)
 
-# print(accuracy1 == accuracy2)  # True
+# print(accuracy1a == accuracy1b)  # True
 
 xcolsa = ", ".join(xcolumns[:-1])
 xcolsb = xcolumns[-1]
-print(f"We used sklearn's package to perform logistic regression on the variables {xcolsa}, and {xcolsb} to achieve a TRAINING accuracy of {accuracy1:0.4f}")
+print(f"We used sklearn's package to perform logistic regression on the variables {xcolsa}, and {xcolsb} to achieve a TRAINING accuracy of {accuracy1a:0.4f}")
 
 ########################################################################
 ### Test Data ##########################################################
@@ -188,11 +189,6 @@ X_test0 = testdata[xcolumns]
 
 # Standardize
 X_test = pd.DataFrame(scaler.transform(X_test0), index=X_test0.index, columns=X_test0.columns)
-
-# Predict response
-yhat_test = model1.predict(X_test)
-
-print(yhat_test)
 
 ########################################################################
 ### Confusion Matrix ###################################################
@@ -237,9 +233,8 @@ plt.show()
 model2 = RandomForestClassifier()
 model2.fit(X_train, y_train)
 y_hat_train2 = model2.predict(X_train)
-y_hat_test2 = model2.predict(X_test)
 
-train_acc = np.sum(y_train == y_hat_train2)
+accuracy2 = np.mean(y_train == y_hat_train2)
 
 ## Confusion Matrix
 conf_mat2 = pd.DataFrame(metrics.confusion_matrix(y_train, y_hat_train2), columns=["Pred. Positive", "Pred. Negative"], index=["True Positive", "True Negative"])
@@ -267,3 +262,22 @@ plt.show()
 
 # Model1 has a AUC of 0.8599
 # Model2 has a AUC of 0.9976
+
+########################################################################
+### Make Prediction ####################################################
+########################################################################
+
+# Because the Random Forest model has the highest ROC AUC, we choose it to make our predictions
+
+# Predict response
+y_hat_test2 = model2.predict(X_test)
+submission = pd.Series(y_hat_test2, index=X_test.index, name=y_train.name)
+
+timestamp = dt.now().strftime("%Y%m%d-%H%M%S")
+submissionPath = os.path.join(datasetsPath, f"submission_{timestamp}.csv")
+submission.to_csv(submissionPath)
+
+# Kaggle submission results:
+# Rank: 11440
+# Score (accuracy): 0.75837
+# See `metaAnalysis.py` for discussion
