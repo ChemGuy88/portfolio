@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import pickle
+import datetime as dt
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import scipy.stats as st
+from IPython import get_ipython
 from pathlib import Path
+from PIL import Image
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.metrics import auc, roc_curve
-from sklearn.naive_bayes import BernoulliNB, CategoricalNB
-from IPython import get_ipython
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.naive_bayes import BernoulliNB
+from sklearn.tree import export_graphviz
+from subprocess import call
 
 ########################################################################
 ### Code housekeeping ##################################################
@@ -45,15 +51,23 @@ def findBestThreshold(fprList, tprList, thresholds):
     return bestThreshold
 
 
+def mean_confidence_interval(data, confidence=0.95):
+    a = 1.0 * np.array(data)
+    n = len(a)
+    m, se = np.mean(a), st.sem(a)
+    h = se * st.t.ppf((1 + confidence) / 2., n-1)
+    return m, m-h, m+h
+
 ########################################################################
 ### Pre-processing #####################################################
 ########################################################################
+
 
 fpath = f"{dataDir}/diabetes_data_upload.csv"
 # cols: Age	Gender	Polyuria	Polydipsia	sudden weight loss	weakness	Polyphagia	Genital thrush	visual blurring	Itching	Irritability	delayed healing	partial paresis	muscle stiffness	Alopecia	Obesity	class
 data = pd.read_csv(fpath)
 
-## Replace string categories to ordinal categories
+# Replace string categories to ordinal categories
 pos_label = ['Yes',
              'Positive',
              'Male']
@@ -62,190 +76,139 @@ neg_label = ['No',
              'Female']
 data = data.replace(to_replace=pos_label + neg_label, value=[1 for _ in pos_label] + [0 for _ in neg_label])
 
-columns = data.columns[data.columns != 'class']
-xx = data[columns].to_numpy()
-yy = data['class'].to_numpy()
+xcolumns = data.columns[data.columns != 'class']
+ycolumns = 'class'
+xx = data[xcolumns].to_numpy()
+yy = data[ycolumns].to_numpy()
 
 ########################################################################
-### Train/test split ###################################################
+### Analysis ###########################################################
 ########################################################################
 
 # Parameters
 train_size = .30
 test_size = 1 - train_size
-random_state = 0
+numSims = 10000
+numSimsMod = numSims / 10
+random_state = None
 
-# Split
-# xtrain, xtest, ytrain, ytest = train_test_split(xx, yy, test_size=test_size, random_state=0)
-sss = StratifiedShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
-for trainindices, testindices in sss.split(xx, yy):
-    xtrain = xx[trainindices]
-    ytrain = yy[trainindices]
-    xtest = xx[testindices]
-    ytest = yy[testindices]
+models = {'Logistic Regression': LogisticRegression().__class__,
+          'BernoulliNB': BernoulliNB().__class__,
+          'Random Forest': RandomForestClassifier().__class__}
+modelsInv = {value: key for key, value in models.items()}
 
-print("""
+# Analysis
+if False:
+    results1 = {modelName: [] for modelName in models.keys()}
+    results2 = {modelName: [] for modelName in models.keys()}
+    arr = np.zeros((3, 2))
+    summary1 = pd.DataFrame(arr, columns=['Train', 'Test'], index=models.keys())
+    print(f"Starting simulations at...\n{dt.datetime.now()}")
+    for iterSim in range(1, numSims+1):
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
+        for trainindices, testindices in sss.split(xx, yy):
+            xtrain = xx[trainindices]
+            ytrain = yy[trainindices]
+            xtest = xx[testindices]
+            ytest = yy[testindices]
+
+        # Logistic Regression
+        clf1 = LogisticRegression(max_iter=1000)
+        clf1.fit(xtrain, ytrain)
+
+        # Bernoulli Naive Bayes
+        # Bernoulli NB is desgined for binary features. Get rid of age or classify it.
+        clf3 = BernoulliNB()
+        clf3.fit(xtrain, ytrain)
+
+        # Random Forest Classification
+        clf4 = RandomForestClassifier(max_depth=2)
+        clf4.fit(xtrain, ytrain)
+
+        # Evaluate models
+        for clf in [clf1, clf3, clf4]:
+            # Accuracy results
+            trainacc = clf.score(xtrain, ytrain)
+            testacc = clf.score(xtest, ytest)
+            modelName = modelsInv[clf.__class__]
+            results1[modelName].append([trainacc, testacc])
+
+            # ROC results
+            ytrainhat = clf.predict(xtrain)
+            ytesthat = clf.predict(xtest)
+            fprList1, tprList1, thresholds1 = roc_curve(ytrain, ytrainhat)
+            fprList2, tprList2, thresholds2 = roc_curve(ytest, ytesthat)
+            roc_auc1 = auc(fprList1, tprList1)
+            roc_auc2 = auc(fprList2, tprList2)
+            results2[modelName].append([roc_auc1, roc_auc2])
+
+        if iterSim % numSimsMod == 0:
+            text = f"Running simulation {iterSim}..."
+            print(dt.datetime.now())
+            print(text)
+
+    # Save results
+    rpath1 = f"{workDir}/pickles 01/results1.pickle"
+    rpath2 = f"{workDir}/pickles 01/results2.pickle"
+    mpath = f"{workDir}/pickles 01/models.pickle"
+    pickle.dump(results1, open(rpath1, 'wb'))
+    pickle.dump(results2, open(rpath2, 'wb'))
+    pickle.dump([clf1, clf3, clf4], open(mpath, 'wb'))
+
 ########################################################################
-### Logistic Regression ################################################
+### Compute and print results from simulations #########################
 ########################################################################
-""")
 
-clf = LogisticRegression(max_iter=1000).fit(xtrain, ytrain)
+rpath1 = f"{workDir}/pickles 01/results1.pickle"
+rpath2 = f"{workDir}/pickles 01/results2.pickle"
+mpath = f"{workDir}/pickles 01/models.pickle"
+results1 = pickle.load(open(rpath1, 'rb'))
+results2 = pickle.load(open(rpath2, 'rb'))
+clf1, clf3, clf4 = pickle.load(open(mpath, 'rb'))
 
-## Evaluate model
-ytrainhat = clf.predict(xtrain)  # Done by clf.score()
-ytesthat = clf.predict(xtest)
-yscore = clf.predict_proba(xtest)
-trainacc = clf.score(xtrain, ytrain)
-testacc = clf.score(xtest, ytest)
+columns = ['Train lb',
+           'Train mean',
+           'Train ub',
+           'Test lb',
+           'Test mean',
+           'Test ub']
+summary2 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
+summary3 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
+for clf in [clf1, clf3, clf4]:
+    modelName = modelsInv[clf.__class__]
 
-# ROC
-fprList1, tprList1, thresholds1 = roc_curve(ytrain, ytrainhat)
-fprList2, tprList2, thresholds2 = roc_curve(ytest, ytesthat)
-roc_auc1 = auc(fprList1, tprList1)
-roc_auc2 = auc(fprList2, tprList2)
+    # Analyze accuracy results
+    accs = np.array(results1[modelName])
+    mean1, lb1, ub1 = mean_confidence_interval(accs[:, 0])
+    mean2, lb2, ub2 = mean_confidence_interval(accs[:, 1])
+    summary2.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
 
-## Report
-results = f"""
-{clf.__class__}
-Using only {train_size:0.0%} of our data to train our model we were able to achieve the following training and test accuracies:
-"""
+    # Analyze ROC results
+    rocs = np.array(results2[modelName])
+    mean1, lb1, ub1 = mean_confidence_interval(rocs[:, 0])
+    mean2, lb2, ub2 = mean_confidence_interval(rocs[:, 1])
+    summary3.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
 
-print(results)
-columns1 = ['Train', 'Test']
-index = ['Accuracy',
-         'auc']
-df = pd.DataFrame([[trainacc, testacc],
-                   [roc_auc1, roc_auc2]], index=index, columns=columns1)
-print(df.round(4))
+print(summary2.round(3))  # Accuracy
+print(summary3.round(3))  # ROC
 
-coef = clf.coef_.ravel()
-results = pd.DataFrame(coef, index=columns)
-print(results)
-
-print("""
 ########################################################################
-### Naive Bayes (Categorical) ##########################################
+### Visualize Decision Tree ############################################
 ########################################################################
-""")
 
-# Works for categorical data, like ours.
+if False:
+    for it, estimator in enumerate(clf4.estimators_[:5]):
+        fpath1 = f"{workDir}/tree_{it}.dot"
+        fpath2 = f"{workDir}/tree_{it}.png"
+        export_graphviz(estimator, out_file=fpath1,
+                        feature_names=xcolumns,
+                        class_names=np.unique(yy).astype(str),
+                        rounded=True, proportion=False,
+                        precision=2, filled=True)
+        call(['dot', '-Tpng', fpath1, '-o', fpath2, '-Gdpi=600'])
+        if False:
+            im = Image.open(fpath2)
+            im.show()
 
-clf = CategoricalNB()
-clf.fit(xtrain, ytrain)
-
-## Evaluate model
-ytrainhat = clf.predict(xtrain)  # Done by clf.score()
-ytesthat = clf.predict(xtest)
-yscore = clf.predict_proba(xtest)
-trainacc = clf.score(xtrain, ytrain)
-testacc = clf.score(xtest, ytest)
-
-# ROC
-fprList1, tprList1, thresholds1 = roc_curve(ytrain, ytrainhat)
-fprList2, tprList2, thresholds2 = roc_curve(ytest, ytesthat)
-roc_auc1 = auc(fprList1, tprList1)
-roc_auc2 = auc(fprList2, tprList2)
-
-## Report
-results = f"""
-{clf.__class__}
-Using only {train_size:0.0%} of our data to train our model we were able to achieve the following training and test accuracies:
-"""
-
-print(results)
-columns1 = ['Train', 'Test']
-index = ['Accuracy',
-         'auc']
-df = pd.DataFrame([[trainacc, testacc],
-                   [roc_auc1, roc_auc2]], index=index, columns=columns1)
-print(df.round(4))
-
-coef = clf.coef_
-results = pd.DataFrame([x.ravel() for x in coef], index=range(1, len(columns)),
-                       columns=range(1, 5))
-print(results.round(4))
-
-print("""
-########################################################################
-### Bernoulli Naive Bayes ##############################################
-########################################################################
-""")
-
-# Bernoulli NB is desgined for binary features. Get rid of age or classify it.
-
-clf = BernoulliNB()
-clf.fit(xtrain, ytrain)
-
-## Evaluate model
-ytrainhat = clf.predict(xtrain)  # Done by clf.score()
-ytesthat = clf.predict(xtest)
-yscore = clf.predict_proba(xtest)
-trainacc = clf.score(xtrain, ytrain)
-testacc = clf.score(xtest, ytest)
-
-# ROC
-fprList1, tprList1, thresholds1 = roc_curve(ytrain, ytrainhat)
-fprList2, tprList2, thresholds2 = roc_curve(ytest, ytesthat)
-roc_auc1 = auc(fprList1, tprList1)
-roc_auc2 = auc(fprList2, tprList2)
-
-## Report
-results = f"""
-{clf.__class__}
-Using only {train_size:0.0%} of our data to train our model we were able to achieve the following training and test accuracies:
-"""
-
-print(results)
-columns1 = ['Train', 'Test']
-index = ['Accuracy',
-         'auc']
-df = pd.DataFrame([[trainacc, testacc],
-                   [roc_auc1, roc_auc2]], index=index, columns=columns1)
-print(df.round(4))
-
-coef = clf.coef_.ravel()
-results = pd.DataFrame(coef, index=columns)
-print(results)
-
-print("""
-########################################################################
-### Random Forest Classification #######################################
-########################################################################
-""")
-
-clf = RandomForestClassifier(max_depth=2).fit(xtrain, ytrain)
-
-# Evaluate model
-ytrainhat = clf.predict(xtrain)  # Done by clf.score()
-ytesthat = clf.predict(xtest)
-yscore = clf.predict_proba(xtest)
-trainacc = clf.score(xtrain, ytrain)
-testacc = clf.score(xtest, ytest)
-
-# ROC
-fprList1, tprList1, thresholds1 = roc_curve(ytrain, ytrainhat)
-fprList2, tprList2, thresholds2 = roc_curve(ytest, ytesthat)
-roc_auc1 = auc(fprList1, tprList1)
-roc_auc2 = auc(fprList2, tprList2)
-
-# Report
-results = f"""
-{clf.__class__}
-Using only {train_size:0.0%} of our data to train our model we were able to achieve the following training and test accuracies:
-"""
-print(results)
-
-columns1 = ['Train', 'Test']
-index = ['Accuracy',
-         'auc']
-df = pd.DataFrame([[trainacc, testacc],
-                   [roc_auc1, roc_auc2]], index=index, columns=columns1)
-print(df.round(4))
-
-importances = clf.feature_importances_  # This is the RF equivalent of model coefficients
-results = pd.DataFrame(importances, index=columns)
-print(results)
-
-# Average train/test scores for 1000 simulations. Do another file with leaner code.
-# Paint decision boundaries for best models. Decision boundaries will help us create a tool for patient self-evaluation
+    importances = pd.DataFrame(clf4.feature_importances, index=xcolumns)
+    importances.sort_values(by=0, ascending=False, inplace=True)
