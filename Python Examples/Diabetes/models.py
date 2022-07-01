@@ -14,8 +14,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import auc, roc_curve
 from sklearn.model_selection import StratifiedShuffleSplit
-from sklearn.naive_bayes import BernoulliNB
-from sklearn.tree import export_graphviz
+from sklearn.naive_bayes import BernoulliNB, CategoricalNB
+from sklearn.tree import DecisionTreeClassifier, export_graphviz
 from subprocess import call
 
 ########################################################################
@@ -24,8 +24,6 @@ from subprocess import call
 
 plt.close('all')
 userDir = str(Path.home())
-workDir = f"{userDir}/Documents/instacon/project"
-dataDir = f"{userDir}/Documents/instacon/project"
 ipython = get_ipython()
 ipython.magic('matplotlib')
 
@@ -92,7 +90,16 @@ numSims = 1000
 numSimsMod = numSims / 10
 random_state = None
 
-models = {'Random Forest': RandomForestClassifier().__class__}
+models = {'Logistic Regression': LogisticRegression().__class__,
+          'Categorical NB': CategoricalNB(),
+          'BernoulliNB': BernoulliNB().__class__,
+          'Decision Tree': DecisionTreeClassifier().__class__,
+          'Random Forest': RandomForestClassifier().__class__}
+modelObjs = {'Logistic Regression': LogisticRegression(max_iter=1000),
+             'Categorical NB': CategoricalNB(),
+             'BernoulliNB': BernoulliNB(),
+             'Decision Tree': DecisionTreeClassifier(),
+             'Random Forest': RandomForestClassifier()}
 modelsInv = {value: key for key, value in models.items()}
 
 # Analysis
@@ -100,8 +107,9 @@ if True:
     results1 = {modelName: [] for modelName in models.keys()}
     results2 = {modelName: [] for modelName in models.keys()}
     results3 = []
-    arr = np.zeros((len(models), 2))
-    summary1 = pd.DataFrame(arr, columns=['Train', 'Test'],
+    resultsCols = ['Train', 'Test']
+    arr = np.zeros((len(models), len(resultsCols)))
+    summary1 = pd.DataFrame(arr, columns=resultsCols,
                             index=models.keys())
     print(f"Starting simulations at...\n{dt.datetime.now()}")
     for iterSim in range(1, numSims+1):
@@ -113,12 +121,11 @@ if True:
             xtest = xx[testindices]
             ytest = yy[testindices]
 
-        # Interpretable RF
-        clf5 = RandomForestClassifier(max_depth=8, n_estimators=1)
-        clf5.fit(xtrain, ytrain)
-
         # Evaluate models
-        for clf in [clf5]:
+        for clf in modelObjs:
+            # Train
+            clf.fit(xtrain, ytrain)
+
             # Accuracy results
             trainacc = clf.score(xtrain, ytrain)
             testacc = clf.score(xtest, ytest)
@@ -135,7 +142,10 @@ if True:
             results2[modelName].append([roc_auc1, roc_auc2])
 
             # Feature Importances results
-            results3.append(clf5.feature_importances_)
+            if type(clf).__class__ in [""]:
+                results3.append(clf.feature_importances_)
+            elif type(clf).__class__ in [""]:
+                results3.append(clf.feature_importances_)
 
         if iterSim % numSimsMod == 0:
             text = f"Running simulation {iterSim}..."
@@ -143,23 +153,23 @@ if True:
             print(text)
 
     # Save results
-    rpath1 = f"{workDir}/results1.pickle"
-    rpath2 = f"{workDir}/results2.pickle"
-    mpath = f"{workDir}/models.pickle"
+    rpath1 = f"results1.pickle"
+    rpath2 = f"results2.pickle"
+    mpath = f"models.pickle"
     pickle.dump(results1, open(rpath1, 'wb'))
     pickle.dump(results2, open(rpath2, 'wb'))
-    pickle.dump(clf5, open(mpath, 'wb'))
+    pickle.dump(clf, open(mpath, 'wb'))
 
 ########################################################################
 ### Compute and print results from simulations #########################
 ########################################################################
 
-rpath1 = f"{workDir}/results1.pickle"
-rpath2 = f"{workDir}/results2.pickle"
-mpath = f"{workDir}/models.pickle"
+rpath1 = f"results1.pickle"
+rpath2 = f"results2.pickle"
+mpath = f"models.pickle"
 results1 = pickle.load(open(rpath1, 'rb'))
 results2 = pickle.load(open(rpath2, 'rb'))
-clf5 = pickle.load(open(mpath, 'rb'))
+clf = pickle.load(open(mpath, 'rb'))
 
 columns = ['Train lb',
            'Train mean',
@@ -171,30 +181,31 @@ summary2 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
 summary3 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
 
 if True:
-    clf = clf5
-    modelName = modelsInv[clf.__class__]
+    for clf in modelObjs:
+        modelName = modelsInv[clf.__class__]
 
-    # Analyze accuracy results
-    accs = np.array(results1[modelName])
-    mean1, lb1, ub1 = mean_confidence_interval(accs[:, 0])
-    mean2, lb2, ub2 = mean_confidence_interval(accs[:, 1])
-    summary2.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
+        # Analyze accuracy results
+        accs = np.array(results1[modelName])
+        mean1, lb1, ub1 = mean_confidence_interval(accs[:, 0])
+        mean2, lb2, ub2 = mean_confidence_interval(accs[:, 1])
+        summary2.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
 
-    # Analyze ROC results
-    rocs = np.array(results2[modelName])
-    mean1, lb1, ub1 = mean_confidence_interval(rocs[:, 0])
-    mean2, lb2, ub2 = mean_confidence_interval(rocs[:, 1])
-    summary3.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
+        # Analyze ROC results
+        rocs = np.array(results2[modelName])
+        mean1, lb1, ub1 = mean_confidence_interval(rocs[:, 0])
+        mean2, lb2, ub2 = mean_confidence_interval(rocs[:, 1])
+        summary3.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
 
-    # Analyze feature importances
-    importances = np.array(results3)
-    means = importances.mean(axis=0)
-    moe = st.sem(importances)
-    lb = means - moe
-    ub = means + moe
-    summary4 = pd.DataFrame([lb, means, ub], columns=xcolumns,
-                            index=['LB', 'Mean', 'UB']).T
-    summary4.sort_values(by='Mean', ascending=False, inplace=True)
+        # Analyze feature importances/coefficients
+        # TODO segregate based on model type
+        importances = np.array(results3)
+        means = importances.mean(axis=0)
+        moe = st.sem(importances)
+        lb = means - moe
+        ub = means + moe
+        summary4 = pd.DataFrame([lb, means, ub], columns=xcolumns,
+                                index=['LB', 'Mean', 'UB']).T
+        summary4.sort_values(by='Mean', ascending=False, inplace=True)
 
 print(summary2.round(3))  # Accuracy
 print(summary3.round(3))  # ROC
@@ -204,13 +215,14 @@ print(summary4.round(3))  # Importances
 ### Visualize Decision Tree ############################################
 ########################################################################
 
-# estimator = clf5.estimators_[0]
-# fpath1 = f"{workDir}/tree.dot"
-# fpath2 = f"{workDir}/tree.png"
-# export_graphviz(estimator, out_file=fpath1,
-#                 feature_names=xcolumns,
-#                 class_names=np.unique(yy).astype(str),
-#                 rounded=True, proportion=False,
-#                 precision=2, filled=True)
-# call(['dot', '-Tpng', fpath1, '-o', fpath2, '-Gdpi=600'])
-# # im = Image.open(fpath2)
+estimator = clf.estimators_[0]
+fpath1 = f"tree.dot"
+fpath2 = f"tree.png"
+export_graphviz(estimator, out_file=fpath1,
+                feature_names=xcolumns,
+                class_names=np.unique(yy).astype(str),
+                rounded=True, proportion=False,
+                precision=2, filled=True)
+call(['dot', '-Tpng', fpath1, '-o', fpath2, '-Gdpi=600'])
+im = Image.open(fpath2)
+im.show()
