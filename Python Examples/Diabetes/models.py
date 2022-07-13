@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import scipy.stats as st
 from IPython import get_ipython
-from pathlib import Path
 from PIL import Image
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -19,13 +18,12 @@ from sklearn.tree import DecisionTreeClassifier, export_graphviz
 from subprocess import call
 
 ########################################################################
-### Code housekeeping ##################################################
+### Script settings ####################################################
 ########################################################################
 
+# IDE settings (Not necessary in Jupyter Notebooks)
 plt.close('all')
-userDir = str(Path.home())
-ipython = get_ipython()
-ipython.magic('matplotlib')
+get_ipython().run_line_magic('matplotlib', "")
 
 ########################################################################
 ### Functions ##########################################################
@@ -61,7 +59,7 @@ def mean_confidence_interval(data, confidence=0.95):
 ########################################################################
 
 
-fpath = f"{dataDir}/diabetes_data_upload.csv"
+fpath = f"diabetes_data_upload.csv"
 # cols: Age	Gender	Polyuria	Polydipsia	sudden weight loss	weakness	Polyphagia	Genital thrush	visual blurring	Itching	Irritability	delayed healing	partial paresis	muscle stiffness	Alopecia	Obesity	class
 data = pd.read_csv(fpath)
 
@@ -73,6 +71,10 @@ neg_label = ['No',
              'Negative',
              'Female']
 data = data.replace(to_replace=pos_label + neg_label, value=[1 for _ in pos_label] + [0 for _ in neg_label])
+
+# Categorize age using `48` as the threshold, based on our exploratory data analysis
+ageThreshold = 48
+data["Age"] = (data["Age"] > ageThreshold) * 1
 
 xcolumns = data.columns[data.columns != 'class']
 ycolumns = 'class'
@@ -91,7 +93,7 @@ numSimsMod = numSims / 10
 random_state = None
 
 models = {'Logistic Regression': LogisticRegression().__class__,
-          'Categorical NB': CategoricalNB(),
+          'Categorical NB': CategoricalNB().__class__,
           'BernoulliNB': BernoulliNB().__class__,
           'Decision Tree': DecisionTreeClassifier().__class__,
           'Random Forest': RandomForestClassifier().__class__}
@@ -100,18 +102,24 @@ modelObjs = {'Logistic Regression': LogisticRegression(max_iter=1000),
              'BernoulliNB': BernoulliNB(),
              'Decision Tree': DecisionTreeClassifier(),
              'Random Forest': RandomForestClassifier()}
+assert np.sum([1 for el in modelObjs if el in models.keys()]) == len(modelObjs)
 modelsInv = {value: key for key, value in models.items()}
+modelObjsResults = {name: [] for name in models.keys()}
+categoricalModels = ["Decision Tree", "Random Forest"]
+nonCategoricalModels = set(models.keys()).difference(categoricalModels)
+assert np.sum([1 for el in categoricalModels if el in models.keys()]) == len(categoricalModels)
+
 
 # Analysis
 if True:
     results1 = {modelName: [] for modelName in models.keys()}
     results2 = {modelName: [] for modelName in models.keys()}
-    results3 = []
+    results3 = {modelName: [] for modelName in models.keys()}
     resultsCols = ['Train', 'Test']
     arr = np.zeros((len(models), len(resultsCols)))
     summary1 = pd.DataFrame(arr, columns=resultsCols,
                             index=models.keys())
-    print(f"Starting simulations at...\n{dt.datetime.now()}")
+    print(f"Starting simulations at {dt.datetime.now()}")
     for iterSim in range(1, numSims+1):
         sss = StratifiedShuffleSplit(n_splits=1, test_size=test_size,
                                      random_state=random_state)
@@ -122,14 +130,13 @@ if True:
             ytest = yy[testindices]
 
         # Evaluate models
-        for clf in modelObjs:
+        for modelName, clf in modelObjs.items():
             # Train
             clf.fit(xtrain, ytrain)
 
             # Accuracy results
             trainacc = clf.score(xtrain, ytrain)
             testacc = clf.score(xtest, ytest)
-            modelName = modelsInv[clf.__class__]
             results1[modelName].append([trainacc, testacc])
 
             # ROC results
@@ -142,14 +149,17 @@ if True:
             results2[modelName].append([roc_auc1, roc_auc2])
 
             # Feature Importances results
-            if type(clf).__class__ in [""]:
-                results3.append(clf.feature_importances_)
-            elif type(clf).__class__ in [""]:
-                results3.append(clf.feature_importances_)
+            if modelName in categoricalModels:
+                results3[modelName].append(clf.feature_importances_)
+            elif modelName in nonCategoricalModels:
+                results3[modelName].append(["NA"])
+
+            # Store model objs
+            modelObjsResults[modelName].append(clf)
 
         if iterSim % numSimsMod == 0:
-            text = f"Running simulation {iterSim}..."
-            print(dt.datetime.now())
+            timestamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            text = f"Running simulation {iterSim} at {timestamp}"
             print(text)
 
     # Save results
@@ -158,7 +168,7 @@ if True:
     mpath = f"models.pickle"
     pickle.dump(results1, open(rpath1, 'wb'))
     pickle.dump(results2, open(rpath2, 'wb'))
-    pickle.dump(clf, open(mpath, 'wb'))
+    pickle.dump(modelObjsResults, open(mpath, 'wb'))
 
 ########################################################################
 ### Compute and print results from simulations #########################
@@ -169,7 +179,7 @@ rpath2 = f"results2.pickle"
 mpath = f"models.pickle"
 results1 = pickle.load(open(rpath1, 'rb'))
 results2 = pickle.load(open(rpath2, 'rb'))
-clf = pickle.load(open(mpath, 'rb'))
+modelObjsResults = pickle.load(open(mpath, 'rb'))
 
 columns = ['Train lb',
            'Train mean',
@@ -181,8 +191,7 @@ summary2 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
 summary3 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
 
 if True:
-    for clf in modelObjs:
-        modelName = modelsInv[clf.__class__]
+    for modelName, clf in modelObjs.items():
 
         # Analyze accuracy results
         accs = np.array(results1[modelName])
@@ -197,15 +206,15 @@ if True:
         summary3.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
 
         # Analyze feature importances/coefficients
-        # TODO segregate based on model type
-        importances = np.array(results3)
-        means = importances.mean(axis=0)
-        moe = st.sem(importances)
-        lb = means - moe
-        ub = means + moe
-        summary4 = pd.DataFrame([lb, means, ub], columns=xcolumns,
-                                index=['LB', 'Mean', 'UB']).T
-        summary4.sort_values(by='Mean', ascending=False, inplace=True)
+        if modelName in categoricalModels:
+            importances = np.array(results3)
+            means = importances.mean(axis=0)
+            moe = st.sem(importances)
+            lb = means - moe
+            ub = means + moe
+            summary4 = pd.DataFrame([lb, means, ub], columns=xcolumns,
+                                    index=['LB', 'Mean', 'UB']).T
+            summary4.sort_values(by='Mean', ascending=False, inplace=True)
 
 print(summary2.round(3))  # Accuracy
 print(summary3.round(3))  # ROC
