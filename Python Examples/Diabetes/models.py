@@ -114,13 +114,17 @@ assert np.sum([1 for el in categoricalModels if el in models.keys()]) == len(cat
 if True:
     results1 = {modelName: [] for modelName in models.keys()}
     results2 = {modelName: [] for modelName in models.keys()}
-    results3 = {modelName: [] for modelName in models.keys()}
+    results3 = {modelName: [] for modelName in models.keys() if modelName in categoricalModels}
+    results4 = np.zeros((numSims, len(categoricalModels), xx.shape[1]))
+    i = -1
     resultsCols = ['Train', 'Test']
     arr = np.zeros((len(models), len(resultsCols)))
     summary1 = pd.DataFrame(arr, columns=resultsCols,
                             index=models.keys())
     print(f"Starting simulations at {dt.datetime.now()}")
     for iterSim in range(1, numSims+1):
+        i += 1
+        j = -1
         sss = StratifiedShuffleSplit(n_splits=1, test_size=test_size,
                                      random_state=random_state)
         for trainindices, testindices in sss.split(xx, yy):
@@ -150,9 +154,11 @@ if True:
 
             # Feature Importances results
             if modelName in categoricalModels:
+                j += 1
                 results3[modelName].append(clf.feature_importances_)
+                results4[i, j, :] = clf.feature_importances_
             elif modelName in nonCategoricalModels:
-                results3[modelName].append(["NA"])
+                pass
 
             # Store model objs
             modelObjsResults[modelName].append(clf)
@@ -187,10 +193,13 @@ columns = ['Train lb',
            'Test lb',
            'Test mean',
            'Test ub']
+confIntCols = ['LB', 'Mean', 'UB']
 summary2 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
 summary3 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
+summary4 = np.zeros((len(categoricalModels), len(confIntCols), xx.shape[1]))
 
 if True:
+    j = -1
     for modelName, clf in modelObjs.items():
 
         # Analyze accuracy results
@@ -207,18 +216,22 @@ if True:
 
         # Analyze feature importances/coefficients
         if modelName in categoricalModels:
-            importances = np.array(results3)
-            means = importances.mean(axis=0)
-            moe = st.sem(importances)
+            j += 1
+            means = results4[:, j, :].mean(axis=0)
+            moe = st.sem(results4[:, j, :])
             lb = means - moe
             ub = means + moe
-            summary4 = pd.DataFrame([lb, means, ub], columns=xcolumns,
-                                    index=['LB', 'Mean', 'UB']).T
-            summary4.sort_values(by='Mean', ascending=False, inplace=True)
+            summary4[j, :, :] = pd.DataFrame([lb, means, ub],
+                                             columns=xcolumns,
+                                             index=confIntCols)
+            # summary4.sort_values(by='Mean', ascending=False, inplace=True)
 
 print(summary2.round(3))  # Accuracy
 print(summary3.round(3))  # ROC
-print(summary4.round(3))  # Importances
+# Importances  # TODO Sort by mean
+for k in range(xx.shape[1]):
+    print(f"Importance Confidence Interval for {xcolumns[k]}:")
+    print(summary4[:, :, k].round(3))
 
 ########################################################################
 ### Visualize Decision Tree ############################################
