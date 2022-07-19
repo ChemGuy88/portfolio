@@ -6,8 +6,12 @@ import datetime as dt
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
+from pyparsing import col, nums
 import scipy.stats as st
 from IPython import get_ipython
+from matplotlib import patches
+from numpy.lib.recfunctions import unstructured_to_structured
 from PIL import Image
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -24,6 +28,9 @@ from subprocess import call
 # IDE settings (Not necessary in Jupyter Notebooks)
 plt.close('all')
 get_ipython().run_line_magic('matplotlib', "")
+
+figure_width = 18
+figure_height = 12
 
 ########################################################################
 ### Functions ##########################################################
@@ -77,6 +84,7 @@ ageThreshold = 48
 data["Age"] = (data["Age"] > ageThreshold) * 1
 
 xcolumns = data.columns[data.columns != 'class']
+featureNameLength = max([len(x) for x in xcolumns])
 ycolumns = 'class'
 xx = data[xcolumns].to_numpy()
 yy = data[ycolumns].to_numpy()
@@ -102,6 +110,7 @@ modelObjs = {'Logistic Regression': LogisticRegression(max_iter=1000),
              'BernoulliNB': BernoulliNB(),
              'Decision Tree': DecisionTreeClassifier(),
              'Random Forest': RandomForestClassifier()}
+nameLength = max([len(modelName) for modelName in models.keys()])
 assert np.sum([1 for el in modelObjs if el in models.keys()]) == len(modelObjs)
 modelsInv = {value: key for key, value in models.items()}
 modelObjsResults = {name: [] for name in models.keys()}
@@ -111,17 +120,14 @@ assert np.sum([1 for el in categoricalModels if el in models.keys()]) == len(cat
 
 
 # Analysis
-if True:
-    results1 = {modelName: [] for modelName in models.keys()}
-    results2 = {modelName: [] for modelName in models.keys()}
-    results3 = {modelName: [] for modelName in models.keys() if modelName in categoricalModels}
-    results4 = np.zeros((numSims, len(categoricalModels), xx.shape[1]))
+if False:
+    results1 = {modelName: [] for modelName in models.keys()}  # Accuracy results
+    results2 = {modelName: [] for modelName in models.keys()}  # ROC results
+    results3 = np.zeros((numSims, len(categoricalModels), xx.shape[1]))  # Feature importances
     i = -1
     resultsCols = ['Train', 'Test']
-    arr = np.zeros((len(models), len(resultsCols)))
-    summary1 = pd.DataFrame(arr, columns=resultsCols,
-                            index=models.keys())
-    print(f"Starting simulations at {dt.datetime.now()}")
+    timestamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"Starting simulations at {timestamp}")
     for iterSim in range(1, numSims+1):
         i += 1
         j = -1
@@ -155,8 +161,7 @@ if True:
             # Feature Importances results
             if modelName in categoricalModels:
                 j += 1
-                results3[modelName].append(clf.feature_importances_)
-                results4[i, j, :] = clf.feature_importances_
+                results3[i, j, :] = clf.feature_importances_
             elif modelName in nonCategoricalModels:
                 pass
 
@@ -169,12 +174,17 @@ if True:
             print(text)
 
     # Save results
-    rpath1 = f"results1.pickle"
-    rpath2 = f"results2.pickle"
+    rpath1 = "results1.pickle"
+    rpath2 = "results2.pickle"
+    rpath3 = "results3.pickle"
     mpath = f"models.pickle"
-    pickle.dump(results1, open(rpath1, 'wb'))
-    pickle.dump(results2, open(rpath2, 'wb'))
-    pickle.dump(modelObjsResults, open(mpath, 'wb'))
+    li = [(rpath1, results1),
+          (rpath2, results2),
+          (rpath3, results3),
+          (mpath, modelObjsResults)]
+    for path, content in li:
+        with open(path, "wb") as file:
+            pickle.dump(content, file)
 
 ########################################################################
 ### Compute and print results from simulations #########################
@@ -182,9 +192,11 @@ if True:
 
 rpath1 = f"results1.pickle"
 rpath2 = f"results2.pickle"
+rpath3 = "results3.pickle"
 mpath = f"models.pickle"
-results1 = pickle.load(open(rpath1, 'rb'))
+results1 = pickle.load(open(rpath1, 'rb'))  # TODO Not sure if this usage of `open` close the file object afterwards. If so, could change the save block above.
 results2 = pickle.load(open(rpath2, 'rb'))
+results3 = pickle.load(open(rpath3, 'rb'))
 modelObjsResults = pickle.load(open(mpath, 'rb'))
 
 columns = ['Train lb',
@@ -194,9 +206,11 @@ columns = ['Train lb',
            'Test mean',
            'Test ub']
 confIntCols = ['LB', 'Mean', 'UB']
+# TODO summary1 <- summary2; summary2 <- summary3; summary3 <- summary4
 summary2 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
 summary3 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
-summary4 = np.zeros((len(categoricalModels), len(confIntCols), xx.shape[1]))
+dtypes = [("Lower Bound", float), ("Mean", float), ("Upper Bound", float), ("Feature", np.dtype(f"U{featureNameLength}")), ("Model Name", np.dtype(f"U{nameLength}"))]
+summary4 = np.zeros((len(categoricalModels), xx.shape[1]), dtype=dtypes)
 
 if True:
     j = -1
@@ -217,34 +231,98 @@ if True:
         # Analyze feature importances/coefficients
         if modelName in categoricalModels:
             j += 1
-            means = results4[:, j, :].mean(axis=0)
-            moe = st.sem(results4[:, j, :])
+            means = results3[:, j, :].mean(axis=0)
+            moe = st.sem(results3[:, j, :])
             lb = means - moe
             ub = means + moe
-            summary4[j, :, :] = pd.DataFrame([lb, means, ub],
-                                             columns=xcolumns,
-                                             index=confIntCols)
-            # summary4.sort_values(by='Mean', ascending=False, inplace=True)
+            summary4[j, :] = [(p, q, r, s, t) for p, q, r, s, t in zip(lb, means, ub, xcolumns, [modelName] * xx.shape[1])]
+    summary4 = summary4.flatten()
+    summary4.sort(order="Mean")
+    summary4 = np.flip(summary4)
+    sortOrder = []
+    for el in summary4["Feature"]:
+        if el not in sortOrder:
+            sortOrder.append(el)
 
 print(summary2.round(3))  # Accuracy
 print(summary3.round(3))  # ROC
-# Importances  # TODO Sort by mean
-for k in range(xx.shape[1]):
-    print(f"Importance Confidence Interval for {xcolumns[k]}:")
-    print(summary4[:, :, k].round(3))
+# Importances
+s4columns = ["Lower Bound", "Mean", "Upper Bound"]
+for featureName in sortOrder:
+    print(f"Importance Confidence Interval for {featureName}:")
+    ar1 = summary4[:][np.where(summary4[:]["Feature"] == featureName)]
+    ar1.sort(order="Model Name")
+    ar = ar1[s4columns]
+    df = pd.DataFrame(ar,
+                      index=ar1["Model Name"])
+    print(df.round(3))
+
+########################################################################
+### Visualize Results Feature Importances ##############################
+########################################################################
+
+# Broadcast numpy 3d array to pandas 2d data frame.
+results3_df = pd.DataFrame(results3.reshape((numSims * len(categoricalModels), xx.shape[1])), columns=xcolumns, index=range(1, numSims * len(categoricalModels)+1))
+li = []
+for modelName in categoricalModels:
+    li.extend([modelName] * numSims)
+results3_df["Model Name"] = li
+
+# Arrange data for boxplots, per https://stackoverflow.com/questions/37191983/python-side-by-side-box-plots-on-same-figure
+data_to_plot = []
+labels = []
+box_positions = []
+tick_positions = []
+distance_between_boxplot_brothers = 0.6
+distance_between_boxplot_cousins = 1
+position = 0
+colormap = sns.color_palette("tab10")[:len(categoricalModels)]  # Or: plt.cm.get_cmap("hsv", range(N)), if N is large
+colors = []
+it = -1
+for featureName in xcolumns:
+    position += distance_between_boxplot_cousins
+    for modelName in categoricalModels:
+        it += 1
+        position += distance_between_boxplot_brothers
+        mask = results3_df["Model Name"] == modelName
+        data_to_plot.append(results3_df[mask][featureName])
+        labels.append(modelName)
+        box_positions.append(position)
+        colors.append(colormap[it])
+    it = -1
+    tick_positions.append(np.mean(box_positions[-2:]))
+
+figure1 = plt.figure(figsize=(figure_width, figure_height))
+ax = figure1.add_axes([0.1, 0.1, 0.85, 0.85])
+boxplot = ax.boxplot(data_to_plot,
+                      positions=box_positions,
+                      patch_artist=True)
+
+for box, color in zip(boxplot["boxes"], colors):
+    box.set_facecolor(color)
+
+ax.set_xlabel("Features", labelpad=10)
+ax.set_ylabel("Feature Importances (GINI importance)", labelpad=10)
+ax.set_xticks(tick_positions)
+ax.set_xticklabels(xcolumns)
+
+# Legend
+handles = [artist for artist in figure1.get_children()[1].get_children() if artist.__name__ == patches.PathPatch.__name__]
+
 
 ########################################################################
 ### Visualize Decision Tree ############################################
 ########################################################################
 
-estimator = clf.estimators_[0]
-fpath1 = f"tree.dot"
-fpath2 = f"tree.png"
-export_graphviz(estimator, out_file=fpath1,
-                feature_names=xcolumns,
-                class_names=np.unique(yy).astype(str),
-                rounded=True, proportion=False,
-                precision=2, filled=True)
-call(['dot', '-Tpng', fpath1, '-o', fpath2, '-Gdpi=600'])
-im = Image.open(fpath2)
-im.show()
+if False:
+    estimator = clf.estimators_[0]
+    fpath1 = f"tree.dot"
+    fpath2 = f"tree.png"
+    export_graphviz(estimator, out_file=fpath1,
+                    feature_names=xcolumns,
+                    class_names=np.unique(yy).astype(str),
+                    rounded=True, proportion=False,
+                    precision=2, filled=True)
+    call(['dot', '-Tpng', fpath1, '-o', fpath2, '-Gdpi=600'])
+    im = Image.open(fpath2)
+    im.show()
