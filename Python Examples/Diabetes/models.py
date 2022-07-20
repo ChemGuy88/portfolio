@@ -311,6 +311,27 @@ ax.set_xticklabels(xcolumns)
 handles = [artist for artist in figure1.get_children()[1].get_children() if artist.__class__.__name__ == patches.PathPatch.__name__]
 ax.legend(handles[:2], categoricalModels)
 
+# Histograms to show distribution of feature importances. These may say more about the algorithm, than the actual medical question.
+numRows = 2
+numCols = 8 + 1
+figure2, axs = plt.subplots(numRows, numCols, sharey=True, tight_layout=True)
+handles = []
+it1 = -1
+for featureName in xcolumns:
+    it1 += 1
+    it2 = 0
+    for modelName in categoricalModels:
+        mask = results3_df["Model Name"] == modelName
+        handle = axs.flatten()[it1].hist(results3_df[mask][featureName],
+                                         alpha=0.5,
+                                         color=colormap[it2])[-1]
+        handles.append(handle)
+        it2 += 1
+figure2.set_figwidth(figure_width)
+figure2.set_figheight(figure_height)
+leg = figure2.legend(handles=handles[:len(categoricalModels)],
+               labels=categoricalModels)
+
 ########################################################################
 ### Visualize Decision Tree ############################################
 ########################################################################
