@@ -194,7 +194,7 @@ rpath1 = f"results1.pickle"
 rpath2 = f"results2.pickle"
 rpath3 = "results3.pickle"
 mpath = f"models.pickle"
-results1 = pickle.load(open(rpath1, 'rb'))  # TODO Not sure if this usage of `open` close the file object afterwards. If so, could change the save block above.
+results1 = pickle.load(open(rpath1, 'rb'))  # TODO Not sure if this usage of `open` closes the file object afterwards. If so, could change the save block above.
 results2 = pickle.load(open(rpath2, 'rb'))
 results3 = pickle.load(open(rpath3, 'rb'))
 modelObjsResults = pickle.load(open(mpath, 'rb'))
@@ -206,11 +206,10 @@ columns = ['Train lb',
            'Test mean',
            'Test ub']
 confIntCols = ['LB', 'Mean', 'UB']
-# TODO summary1 <- summary2; summary2 <- summary3; summary3 <- summary4
+summary1 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
 summary2 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
-summary3 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
 dtypes = [("Lower Bound", float), ("Mean", float), ("Upper Bound", float), ("Feature", np.dtype(f"U{featureNameLength}")), ("Model Name", np.dtype(f"U{nameLength}"))]
-summary4 = np.zeros((len(categoricalModels), xx.shape[1]), dtype=dtypes)
+summary3 = np.zeros((len(categoricalModels), xx.shape[1]), dtype=dtypes)
 
 if True:
     j = -1
@@ -220,13 +219,13 @@ if True:
         accs = np.array(results1[modelName])
         mean1, lb1, ub1 = mean_confidence_interval(accs[:, 0])
         mean2, lb2, ub2 = mean_confidence_interval(accs[:, 1])
-        summary2.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
+        summary1.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
 
         # Analyze ROC results
         rocs = np.array(results2[modelName])
         mean1, lb1, ub1 = mean_confidence_interval(rocs[:, 0])
         mean2, lb2, ub2 = mean_confidence_interval(rocs[:, 1])
-        summary3.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
+        summary2.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
 
         # Analyze feature importances/coefficients
         if modelName in categoricalModels:
@@ -235,27 +234,31 @@ if True:
             moe = st.sem(results3[:, j, :])
             lb = means - moe
             ub = means + moe
-            summary4[j, :] = [(p, q, r, s, t) for p, q, r, s, t in zip(lb, means, ub, xcolumns, [modelName] * xx.shape[1])]
-    summary4 = summary4.flatten()
-    summary4.sort(order="Mean")
-    summary4 = np.flip(summary4)
+            summary3[j, :] = [(p, q, r, s, t) for p, q, r, s, t in zip(lb, means, ub, xcolumns, [modelName] * xx.shape[1])]
+    summary3 = summary3.flatten()
+    summary3.sort(order="Mean")
+    summary3 = np.flip(summary3)
     sortOrder = []
-    for el in summary4["Feature"]:
+    for el in summary3["Feature"]:
         if el not in sortOrder:
             sortOrder.append(el)
 
-print(summary2.round(3))  # Accuracy
-print(summary3.round(3))  # ROC
+print(summary1.round(3))  # Accuracy
+print(summary2.round(3))  # ROC
 # Importances
 s4columns = ["Lower Bound", "Mean", "Upper Bound"]
 for featureName in sortOrder:
     print(f"Importance Confidence Interval for {featureName}:")
-    ar1 = summary4[:][np.where(summary4[:]["Feature"] == featureName)]
+    ar1 = summary3[:][np.where(summary3[:]["Feature"] == featureName)]
     ar1.sort(order="Model Name")
     ar = ar1[s4columns]
     df = pd.DataFrame(ar,
                       index=ar1["Model Name"])
     print(df.round(3))
+
+########################################################################
+### Visualize Results: Feature Importances #############################
+########################################################################
 
 ########################################################################
 ### Visualize Results: Feature Importances #############################
