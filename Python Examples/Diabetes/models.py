@@ -257,8 +257,10 @@ for featureName in sortOrder:
     print(df.round(3))
 
 ########################################################################
-### Visualize Results: Feature Importances #############################
+### Visualize Results: Accuracies & ROCs ###############################
 ########################################################################
+
+# TODO
 
 ########################################################################
 ### Visualize Results: Feature Importances #############################
@@ -315,22 +317,32 @@ ax.legend(handles[:2], categoricalModels)
 numRows = 2
 numCols = 8 + 1
 figure2, axs = plt.subplots(numRows, numCols, sharey=True, tight_layout=True)
+axs = axs.flatten()
 handles = []
-it1 = -1
-for featureName in xcolumns:
-    it1 += 1
-    it2 = 0
-    for modelName in categoricalModels:
-        mask = results3_df["Model Name"] == modelName
-        handle = axs.flatten()[it1].hist(results3_df[mask][featureName],
-                                         alpha=0.5,
-                                         color=colormap[it2])[-1]
-        handles.append(handle)
-        it2 += 1
+it_features = -1
+axs_to_remove = []
+for it_plots in range(numRows * numCols):
+    if (it_plots+1) % numCols == 0:
+        axs_to_remove.append(it_plots)
+    else:
+        it_features += 1
+        it_colors = 0
+        featureName = xcolumns[it_features]
+        for modelName in categoricalModels:
+            mask = results3_df["Model Name"] == modelName
+            handle = axs[it_plots].hist(results3_df[mask][featureName],
+                                            alpha=0.5,
+                                            color=colormap[it_colors])[-1]
+            handles.append(handle)
+            it_colors += 1
+
+for idx in axs_to_remove:
+    axs[idx].remove()
+leg = figure2.legend(handles=handles[:len(categoricalModels)],
+               labels=categoricalModels,
+               loc="center right")
 figure2.set_figwidth(figure_width)
 figure2.set_figheight(figure_height)
-leg = figure2.legend(handles=handles[:len(categoricalModels)],
-               labels=categoricalModels)
 
 ########################################################################
 ### Visualize Decision Tree ############################################
