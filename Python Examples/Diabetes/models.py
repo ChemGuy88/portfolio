@@ -7,11 +7,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from pyparsing import col, nums
 import scipy.stats as st
 from IPython import get_ipython
 from matplotlib import patches
-from numpy.lib.recfunctions import unstructured_to_structured
 from PIL import Image
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -20,6 +18,10 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.naive_bayes import BernoulliNB, CategoricalNB
 from sklearn.tree import DecisionTreeClassifier, export_graphviz
 from subprocess import call
+
+# Import work directory, user modules
+
+from plots import plot_evaluation_metrics
 
 ########################################################################
 ### Script settings ####################################################
@@ -260,89 +262,92 @@ for featureName in sortOrder:
 ### Visualize Results: Accuracies & ROCs ###############################
 ########################################################################
 
-# TODO
+metrics = ["Train", "Test"]
+accFig1, accFig2 = plot_evaluation_metrics(models, metrics, "Accuracy", results1, numSims, figure_width, figure_height)
+rocFig1, rocFig2 = plot_evaluation_metrics(models, metrics, "ROC", results2, numSims, figure_width, figure_height)
 
 ########################################################################
 ### Visualize Results: Feature Importances #############################
 ########################################################################
 
-# Broadcast numpy 3d array to pandas 2d data frame.
-results3_df = pd.DataFrame(results3.reshape((numSims * len(categoricalModels), xx.shape[1])), columns=xcolumns, index=range(1, numSims * len(categoricalModels)+1))
-li = []
-for modelName in categoricalModels:
-    li.extend([modelName] * numSims)
-results3_df["Model Name"] = li
-
-# Arrange data for boxplots, per https://stackoverflow.com/questions/37191983/python-side-by-side-box-plots-on-same-figure
-data_to_plot = []
-labels = []
-box_positions = []
-tick_positions = []
-distance_between_boxplot_brothers = 0.6
-distance_between_boxplot_cousins = 1
-position = 0
-colormap = sns.color_palette("tab10")[:len(categoricalModels)]  # Or: plt.cm.get_cmap("hsv", range(N)), if N is large
-colors = []
-it = -1
-for featureName in xcolumns:
-    position += distance_between_boxplot_cousins
+if False:
+    # Broadcast numpy 3d array to pandas 2d data frame.
+    results3_df = pd.DataFrame(results3.reshape((numSims * len(categoricalModels), xx.shape[1])), columns=xcolumns, index=range(1, numSims * len(categoricalModels)+1))
+    li = []
     for modelName in categoricalModels:
-        it += 1
-        position += distance_between_boxplot_brothers
-        mask = results3_df["Model Name"] == modelName
-        data_to_plot.append(results3_df[mask][featureName])
-        labels.append(modelName)
-        box_positions.append(position)
-        colors.append(colormap[it])
+        li.extend([modelName] * numSims)
+    results3_df["Model Name"] = li
+
+    # Arrange data for boxplots, per https://stackoverflow.com/questions/37191983/python-side-by-side-box-plots-on-same-figure
+    data_to_plot = []
+    labels = []
+    box_positions = []
+    tick_positions = []
+    distance_between_boxplot_brothers = 0.6
+    distance_between_boxplot_cousins = 1
+    position = 0
+    colormap = sns.color_palette("tab10")[:len(categoricalModels)]  # Or: plt.cm.get_cmap("hsv", range(N)), if N is large
+    colors = []
     it = -1
-    tick_positions.append(np.mean(box_positions[-2:]))
-
-figure1 = plt.figure(figsize=(figure_width, figure_height))
-ax = figure1.add_axes([0.1, 0.1, 0.85, 0.85])
-boxplot = ax.boxplot(data_to_plot,
-                      positions=box_positions,
-                      patch_artist=True)
-
-for box, color in zip(boxplot["boxes"], colors):
-    box.set_facecolor(color)
-
-ax.set_xlabel("Features", labelpad=10)
-ax.set_ylabel("Feature Importances (GINI importance)", labelpad=10)
-ax.set_xticks(tick_positions)
-ax.set_xticklabels(xcolumns)
-handles = [artist for artist in figure1.get_children()[1].get_children() if artist.__class__.__name__ == patches.PathPatch.__name__]
-ax.legend(handles[:2], categoricalModels)
-
-# Histograms to show distribution of feature importances. These may say more about the algorithm, than the actual medical question.
-numRows = 2
-numCols = 8 + 1
-figure2, axs = plt.subplots(numRows, numCols, sharey=True, tight_layout=True)
-axs = axs.flatten()
-handles = []
-it_features = -1
-axs_to_remove = []
-for it_plots in range(numRows * numCols):
-    if (it_plots+1) % numCols == 0:
-        axs_to_remove.append(it_plots)
-    else:
-        it_features += 1
-        it_colors = 0
-        featureName = xcolumns[it_features]
+    for featureName in xcolumns:
+        position += distance_between_boxplot_cousins
         for modelName in categoricalModels:
+            it += 1
+            position += distance_between_boxplot_brothers
             mask = results3_df["Model Name"] == modelName
-            handle = axs[it_plots].hist(results3_df[mask][featureName],
-                                            alpha=0.5,
-                                            color=colormap[it_colors])[-1]
-            handles.append(handle)
-            it_colors += 1
+            data_to_plot.append(results3_df[mask][featureName])
+            labels.append(modelName)
+            box_positions.append(position)
+            colors.append(colormap[it])
+        it = -1
+        tick_positions.append(np.mean(box_positions[-2:]))
 
-for idx in axs_to_remove:
-    axs[idx].remove()
-leg = figure2.legend(handles=handles[:len(categoricalModels)],
-               labels=categoricalModels,
-               loc="center right")
-figure2.set_figwidth(figure_width)
-figure2.set_figheight(figure_height)
+    figure5 = plt.figure(figsize=(figure_width, figure_height))
+    ax = figure5.add_axes([0.1, 0.1, 0.85, 0.85])
+    boxplot = ax.boxplot(data_to_plot,
+                        positions=box_positions,
+                        patch_artist=True)
+
+    for box, color in zip(boxplot["boxes"], colors):
+        box.set_facecolor(color)
+
+    ax.set_xlabel("Features", labelpad=10)
+    ax.set_ylabel("Feature Importances (GINI importance)", labelpad=10)
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(xcolumns)
+    handles = [artist for artist in figure5.get_children()[1].get_children() if artist.__class__.__name__ == patches.PathPatch.__name__]
+    ax.legend(handles[:len(categoricalModels)], categoricalModels)
+
+    # Histograms to show distribution of feature importances. These may say more about the algorithm, than the actual medical question.
+    numRows = 2
+    numCols = 8 + 1
+    figure6, axs = plt.subplots(numRows, numCols, sharey=True, tight_layout=True)
+    axs = axs.flatten()
+    handles = []
+    it_features = -1
+    axs_to_remove = []
+    for it_plots in range(numRows * numCols):
+        if (it_plots+1) % numCols == 0:
+            axs_to_remove.append(it_plots)
+        else:
+            it_features += 1
+            it_colors = 0
+            featureName = xcolumns[it_features]
+            for modelName in categoricalModels:
+                mask = results3_df["Model Name"] == modelName
+                handle = axs[it_plots].hist(results3_df[mask][featureName],
+                                                alpha=0.5,
+                                                color=colormap[it_colors])[-1]
+                handles.append(handle)
+                it_colors += 1
+
+    for idx in axs_to_remove:
+        axs[idx].remove()
+    leg = figure6.legend(handles=handles[:len(categoricalModels)],
+                labels=categoricalModels,
+                loc="center right")
+    figure6.set_figwidth(figure_width)
+    figure6.set_figheight(figure_height)
 
 ########################################################################
 ### Visualize Decision Tree ############################################
