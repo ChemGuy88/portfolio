@@ -258,7 +258,7 @@ for featureName in sortOrder:
     print(df.round(3))
 
 ########################################################################
-### Visualize Results Feature Importances ##############################
+### Visualize Results: Feature Importances #############################
 ########################################################################
 
 # Broadcast numpy 3d array to pandas 2d data frame.
@@ -305,10 +305,8 @@ ax.set_xlabel("Features", labelpad=10)
 ax.set_ylabel("Feature Importances (GINI importance)", labelpad=10)
 ax.set_xticks(tick_positions)
 ax.set_xticklabels(xcolumns)
-
-# Legend
-handles = [artist for artist in figure1.get_children()[1].get_children() if artist.__name__ == patches.PathPatch.__name__]
-
+handles = [artist for artist in figure1.get_children()[1].get_children() if artist.__class__.__name__ == patches.PathPatch.__name__]
+ax.legend(handles[:2], categoricalModels)
 
 ########################################################################
 ### Visualize Decision Tree ############################################
