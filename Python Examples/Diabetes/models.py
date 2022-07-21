@@ -289,3 +289,20 @@ if False:
     call([dot_command, '-Tpng', fpath1, '-o', fpath2, '-Gdpi=600'])
     im = Image.open(fpath2)
     im.show()
+
+# TODO pick most representative tree to visualize, take mode of each node?
+# Tree averages:
+#  https://cran.r-project.org/web/packages/TreeDist/vignettes/Using-TreeDist.html
+#  https://www.google.com/search?q=get+similarity+between+two+trees
+# pushd "\\hq3hfsvip01\autoreh\Professional Development\Data Science Portfolio\Python Examples\Diabetes"
+if True:
+    models = modelObjsResults["Decision Tree"]
+    tree = models[0].tree_
+    node_sample_values = tree.value
+    node_feature_split_criteria = tree.feature
+    node_feature_split_criteria_as_name = [xcolumns[idx] for idx in node_feature_split_criteria]
+    series = pd.Series(models)
+    # trees = series.apply(lambda x: x.tree_)
+    node_features = series.apply(lambda x: x.tree_.feature.tolist())
+    for sim in modelObjsResults["Decision Tree"]:
+        pass
