@@ -276,16 +276,16 @@ if False:
 ### Visualize Decision Tree ############################################
 ########################################################################
 
-# TODO pick most representative tree to visualize, take mode of each node?
-if True:
+if False:
     estimator = modelObjsResults["Decision Tree"][0]
     fpath1 = f"tree.dot"
     fpath2 = f"tree.png"
     export_graphviz(estimator, out_file=fpath1,
                     feature_names=xcolumns,
-                    class_names=np.unique(ytrain).astype(str),
+                    class_names=np.unique(yy).astype(str),
                     rounded=True, proportion=False,
                     precision=2, filled=True)
-    call(['dot', '-Tpng', fpath1, '-o', fpath2, '-Gdpi=600'])
+    dot_command = "C:\\Users\\autoreh\\Documents\\Graphviz\\bin\\dot"
+    call([dot_command, '-Tpng', fpath1, '-o', fpath2, '-Gdpi=600'])
     im = Image.open(fpath2)
     im.show()
