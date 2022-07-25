@@ -21,7 +21,7 @@ from subprocess import call
 
 # Import work directory, user modules
 
-from plots import plot_evaluation_metrics, plot_feature_importances
+from functions import plot_evaluation_metrics, plot_feature_importances
 
 ########################################################################
 ### Script settings ####################################################
