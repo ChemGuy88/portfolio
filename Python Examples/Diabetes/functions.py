@@ -174,3 +174,22 @@ def plot_feature_importances(results, numSims, categoricalModels, xx, xcolumns, 
     figure6.set_figheight(figure_height)
 
     return figure5, figure6
+
+
+def get_tree_average(modelObjsResults, xcolumns):
+    """
+    Not finished
+
+    Export trees for use with R
+    Use R package "TreeDist" to get average of trees
+    """
+    models = modelObjsResults["Decision Tree"]
+    tree = models[0].tree_
+    node_sample_values = tree.value
+    node_feature_split_criteria = tree.feature
+    node_feature_split_criteria_as_name = [xcolumns[idx] for idx in node_feature_split_criteria]
+    series = pd.Series(models)
+    # trees = series.apply(lambda x: x.tree_)
+    node_features = series.apply(lambda x: x.tree_.feature.tolist())
+    for sim in modelObjsResults["Decision Tree"]:
+        pass
