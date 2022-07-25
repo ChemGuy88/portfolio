@@ -1,6 +1,6 @@
 **/.DS_Store
 **/*.pyc
-!.gitignore
-!**/*.py
-!**/*.ipynb
-!**/*.csv
+**/*.pickle
+**/*.png
+**/Thumbs.db
+**/*.dot
