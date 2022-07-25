@@ -213,37 +213,36 @@ summary2 = pd.DataFrame(columns=columns, index=models.keys(), dtype=float)
 dtypes = [("Lower Bound", float), ("Mean", float), ("Upper Bound", float), ("Feature", np.dtype(f"U{featureNameLength}")), ("Model Name", np.dtype(f"U{nameLength}"))]
 summary3 = np.zeros((len(categoricalModels), xx.shape[1]), dtype=dtypes)
 
-if True:
-    j = -1
-    for modelName, clf in modelObjs.items():
+j = -1
+for modelName, clf in modelObjs.items():
 
-        # Analyze accuracy results
-        accs = np.array(results1[modelName])
-        mean1, lb1, ub1 = mean_confidence_interval(accs[:, 0])
-        mean2, lb2, ub2 = mean_confidence_interval(accs[:, 1])
-        summary1.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
+    # Analyze accuracy results
+    accs = np.array(results1[modelName])
+    mean1, lb1, ub1 = mean_confidence_interval(accs[:, 0])
+    mean2, lb2, ub2 = mean_confidence_interval(accs[:, 1])
+    summary1.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
 
-        # Analyze ROC results
-        rocs = np.array(results2[modelName])
-        mean1, lb1, ub1 = mean_confidence_interval(rocs[:, 0])
-        mean2, lb2, ub2 = mean_confidence_interval(rocs[:, 1])
-        summary2.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
+    # Analyze ROC results
+    rocs = np.array(results2[modelName])
+    mean1, lb1, ub1 = mean_confidence_interval(rocs[:, 0])
+    mean2, lb2, ub2 = mean_confidence_interval(rocs[:, 1])
+    summary2.loc[modelName, :] = [lb1, mean1, ub1, lb2, mean2, ub2]
 
-        # Analyze feature importances/coefficients
-        if modelName in categoricalModels:
-            j += 1
-            means = results3[:, j, :].mean(axis=0)
-            moe = st.sem(results3[:, j, :])
-            lb = means - moe
-            ub = means + moe
-            summary3[j, :] = [(p, q, r, s, t) for p, q, r, s, t in zip(lb, means, ub, xcolumns, [modelName] * xx.shape[1])]
-    summary3 = summary3.flatten()
-    summary3.sort(order="Mean")
-    summary3 = np.flip(summary3)
-    sortOrder = []
-    for el in summary3["Feature"]:
-        if el not in sortOrder:
-            sortOrder.append(el)
+    # Analyze feature importances/coefficients
+    if modelName in categoricalModels:
+        j += 1
+        means = results3[:, j, :].mean(axis=0)
+        moe = st.sem(results3[:, j, :])
+        lb = means - moe
+        ub = means + moe
+        summary3[j, :] = [(p, q, r, s, t) for p, q, r, s, t in zip(lb, means, ub, xcolumns, [modelName] * xx.shape[1])]
+summary3 = summary3.flatten()
+summary3.sort(order="Mean")
+summary3 = np.flip(summary3)
+sortOrder = []
+for el in summary3["Feature"]:
+    if el not in sortOrder:
+        sortOrder.append(el)
 
 if False:
     print(summary1.round(3))  # Accuracy
@@ -290,19 +289,5 @@ if False:
     im = Image.open(fpath2)
     im.show()
 
-# TODO pick most representative tree to visualize, take mode of each node?
-# Tree averages:
-#  https://cran.r-project.org/web/packages/TreeDist/vignettes/Using-TreeDist.html
-#  https://www.google.com/search?q=get+similarity+between+two+trees
-# pushd "\\hq3hfsvip01\autoreh\Professional Development\Data Science Portfolio\Python Examples\Diabetes"
-if True:
-    models = modelObjsResults["Decision Tree"]
-    tree = models[0].tree_
-    node_sample_values = tree.value
-    node_feature_split_criteria = tree.feature
-    node_feature_split_criteria_as_name = [xcolumns[idx] for idx in node_feature_split_criteria]
-    series = pd.Series(models)
-    # trees = series.apply(lambda x: x.tree_)
-    node_features = series.apply(lambda x: x.tree_.feature.tolist())
-    for sim in modelObjsResults["Decision Tree"]:
-        pass
+# TODO pick most representative tree to visualize, e.g. tree average using R package "TreeDist"
+# tree = get_average_tree(modelObjsResults, xcolumns)
