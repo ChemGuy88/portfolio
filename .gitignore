@@ -4,3 +4,5 @@
 **/*.png
 **/Thumbs.db
 **/*.dot
+*.xml
+*.JSON

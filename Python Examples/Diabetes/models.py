@@ -6,10 +6,8 @@ import datetime as dt
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import scipy.stats as st
 from IPython import get_ipython
-from matplotlib import patches
 from PIL import Image
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
