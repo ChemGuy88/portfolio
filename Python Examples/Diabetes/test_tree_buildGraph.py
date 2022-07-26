@@ -2,10 +2,19 @@
 Helper file
 """
 
+from IPython import get_ipython
 import pickle
+import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 import pandas as pd
 
+########################################################################
+### Script Settings ####################################################
+########################################################################
+
+plt.close('all')
+get_ipython().run_line_magic('matplotlib', "")
 
 ########################################################################
 ### Load data ##########################################################
@@ -54,7 +63,7 @@ class TreeGraph(object):
         self.n_nodes = classifier.tree_.node_count
         self.children_left = classifier.tree_.children_left
         self.children_right = classifier.tree_.children_right
-        self.feature = classifier.tree_.feature
+        self.features = classifier.tree_.feature
         self.threshold = classifier.tree_.threshold
 
     def makeTree(self):
@@ -88,7 +97,7 @@ class TreeGraph(object):
         n_nodes = self.n_nodes
         children_left = self.children_left
         children_right = self.children_right
-        feature = self.feature
+        features = self.features
         threshold = self.threshold
         node_depth = self.node_depth
         is_leaves = self.is_leaves
@@ -112,13 +121,61 @@ class TreeGraph(object):
                         space=node_depth[i] * "\t",
                         node=i,
                         left=children_left[i],
-                        feature=feature[i],
+                        feature=features[i],
                         threshold=threshold[i],
                         right=children_right[i],
                     )
                 )
 
-treeGraph = TreeGraph(classifier)
+    def makeGraph(self):
+        n_nodes = self.n_nodes
+        is_leaves = self.is_leaves
+        children_left = self.children_left
+        children_right = self.children_right
+        features = self.features
 
+        graph = nx.Graph()
+        for i in range(n_nodes):
+            if is_leaves[i]:
+                pass
+            else:
+                left = children_left[i]
+                right = children_right[i]
+                feature = features[i]
+                graph.add_nodes_from([(i, {"feature": feature})])
+                graph.add_edge(i, left)
+                graph.add_edge(i, right)
+        self.graph = graph
+        return graph
+
+# Create my own graph
+treeGraph = TreeGraph(classifier)
 node_depth, is_leaves = treeGraph.makeTree()
-treeGraph.print()
+graph = treeGraph.makeGraph()
+
+# compare to create graph with networkx
+path = r"tree-0.dot"
+graph2 = nx.drawing.nx_agraph.read_dot(path)
+
+fig, axs = plt.subplots(2, 6)
+axs = axs.flatten()
+layouts = ["graphviz_layout",
+           "bipartite_layout",
+           "circular_layout",
+           "kamada_kawai_layout",
+           "planar_layout",
+           "random_layout",
+           "rescale_layout",
+           "shell_layout",
+           "spring_layout",
+           "spectral_layout",
+           "spiral_layout",
+           "multipartite_layout"]
+
+# Graph with different layouts https://networkx.org/documentation/stable/reference/generated/networkx.drawing.nx_pydot.pydot_layout.html
+# 1
+pos = nx.drawing.nx_pydot.graphviz_layout(graph2)  # https://stackoverflow.com/questions/35177262/importerror-no-module-named-pydot-unable-to-import-pydot
+nx.draw_networkx(graph2, pos=pos, arrows=True, with_labels=True, ax=axs[0])
+# 2
+# pos = nx.bipartite_layout(graph2, graph2.nodes)
+# nx.draw_networkx(graph2, pos=pos, arrows=True, with_labels=True, ax=axs[1])
